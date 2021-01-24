@@ -2,67 +2,63 @@ import { Logger } from "@nestjs/common";
 import { randomBytes } from "crypto";
 import { Request, Response } from "express";
 
-interface RequestData {
-    param?: any,
-    query?: any,
-    body?: any
-}
-
-interface ResponseData {
-    headers?: any;
-    body?: any
-}
-
 export class RequestResponeLogger {
 
     constructor(private readonly logger: Logger) {
     }
 
-    logRequest(request: Request): void {
-        const id = randomBytes(4).toString('hex');
+    logRequest(request: Request): void {     
         const requestLine = this.getRequestLine(request);
 
-        let requestLog = `Req(${id}): "${requestLine}"`;
+        request.logging = { id: randomBytes(4).toString('hex') };
+
+        let requestLog = `Req(${request.logging.id}): "${requestLine}"`;
 
         if (Object.keys(request.body).length) {
-            requestLog = requestLog.concat("\n", JSON.stringify(request.body, null, 2));
-        } else {}
-
-        (request as any).id = id;
+            requestLog = requestLog.concat("\n", JSON.stringify(request.body, null, 0));
+        }
 
         this.logger.log(requestLog);
     }
 
-    logResponse(request: Request, response: Response, body: any, status?: number): void {
-        const id = request.hasOwnProperty('id') ? (request as any).id : '--------';
+    logResponse(request: Request, response: Response, body: unknown, status?: number): void {
+        const id = request.logging?.id ? request.logging.id : '--------';
         const requestLine = this.getRequestLine(request);
         const statusCode = status ? status : response.statusCode;
-        const contentLength = this.getContentLength(body);
+
+        const bodyAsString = this.getBody(body);
+        const contentLength = bodyAsString.length;
 
         let requestLog = `Res(${id}): "${requestLine}" ${statusCode} ${contentLength}`;
 
-        if (body) {
-            requestLog = requestLog.concat("\n", JSON.stringify(body, null, 2));
+        if (bodyAsString.length > 0) {
+            requestLog = requestLog.concat("\n", bodyAsString);
         }
 
         this.logger.log(requestLog); 
     }
 
-    private getRequestLine(request: Request) {
+    private getRequestLine(request: Request): string {
         const { method, url, httpVersion, protocol } = request;
         return `${method} ${url} ${protocol.toUpperCase()}/${httpVersion}`;
     }
 
-    private getContentLength(data: any) {
-        const type = typeof(data);
-        switch(type) {
-          case 'string':
-            return data.length;
-          case 'number':
-          case 'boolean':
-            return data.toString().length;
-          case 'object':
-            return JSON.stringify(data).length;
+    private getBody(body: unknown): string {
+        if (body === null || body === undefined) {
+            return '';
         }
+        const type = typeof(body);
+        switch(type) {
+            case 'string':
+                return (body as string);
+            case 'number':
+                return (body as number).toString();
+            case 'boolean':
+                return (body as boolean).toString();
+            case 'object':
+                return JSON.stringify(body, null, 0);
+        }
+
     }
+
 }
